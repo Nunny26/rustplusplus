@@ -57,6 +57,8 @@ class MapMarkers {
         this.crateLargeOilRigTimer = null;
         this.crateLargeOilRigLocation = null;
         this.deepSeaTimer = null;
+        this.proximityAlertInterval = null;
+        this.proximityAlertNoHeliCount = 0;
 
         /* Event dates */
         this.timeSinceCargoShipWasOut = null;
@@ -747,6 +749,13 @@ class MapMarkers {
             patrolHelicopter.y = marker.y;
             patrolHelicopter.location = pos;
         }
+
+        if (this.patrolHelicopters.length > 0 && this.proximityAlertInterval === null) {
+            this.proximityAlertNoHeliCount = 0;
+            this.proximityAlertInterval = setInterval(() => {
+                this.checkHeliProximity();
+            }, 7000);
+        }
     }
 
     updateTravelingVendors(mapMarkers) {
@@ -894,6 +903,41 @@ class MapMarkers {
         return closestMonument;
     }
 
+    checkHeliProximity() {
+        if (this.patrolHelicopters.length === 0) {
+            this.proximityAlertNoHeliCount++;
+            if (this.proximityAlertNoHeliCount >= 3) {
+                clearInterval(this.proximityAlertInterval);
+                this.proximityAlertInterval = null;
+                this.proximityAlertNoHeliCount = 0;
+            }
+            return;
+        }
+
+        this.proximityAlertNoHeliCount = 0;
+
+        for (const heli of this.patrolHelicopters) {
+            const endangeredPlayers = [];
+
+            for (const player of this.rustplus.team.players) {
+                if (player.isOnline) {
+                    const distance = Map.getDistance(heli.x, heli.y, player.x, player.y);
+                    if (distance < 750) {
+                        endangeredPlayers.push(player.name);
+                    }
+                }
+            }
+
+            if (endangeredPlayers.length > 0) {
+                const names = endangeredPlayers.join(', ');
+                const alertString = `Patrol is approaching ${names}`;
+                
+                this.rustplus.log(this.client.intlGet(null, 'eventCap'), alertString);
+                this.rustplus.sendInGameMessage(alertString);
+            }
+        }
+    }
+
     reset() {
         this.players = [];
         this.vendingMachines = [];
@@ -937,6 +981,12 @@ class MapMarkers {
         this.crateLargeOilRigLocation = null;
 
         this.isDeepSeaActive = false;
+
+        if (this.proximityAlertInterval) {
+            clearInterval(this.proximityAlertInterval);
+            this.proximityAlertInterval = null;
+        }
+        this.proximityAlertNoHeliCount = 0;
     }
 }
 
